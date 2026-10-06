@@ -1,10 +1,45 @@
 // generated list of workouts based on relevance to user, muscle group or frequently used
 import React, {useState, useEffect, useMemo} from 'react';
 
+// Read custom exercises saved in this browser.
+function loadCustomExercises() {
+  const savedText = localStorage.getItem('osc-custom-exercises');
+
+  if (savedText === null) {
+    return [];
+  }
+
+  const savedExercises = JSON.parse(savedText);
+
+  if (!Array.isArray(savedExercises)) {
+    throw new Error('Saved exercises must be a list.');
+  }
+
+  for (const exercise of savedExercises) {
+    if (
+      !exercise ||
+      typeof exercise.id !== 'string' ||
+      typeof exercise.name !== 'string' ||
+      exercise.isCustom !== true
+    ) {
+      throw new Error('Invalid saved exercise.');
+    }
+  }
+
+  return savedExercises;
+}
+
 const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+
+  // Custom exercise form
+  const [customExerciseName, setCustomExerciseName] = useState('');
+
+  // Stores the ID of the exercise this custom exercise is based on.
+  const [relatedExerciseId, setRelatedExerciseId] = useState('');
+  // Holds a validation message
+  const [creationError, setCreationError] = useState('');
 
   //filter & Search states
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +51,14 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
 
   useEffect(() => {
     const fetchExercises = async () => {
+
+      let savedExercises = [];
+
+      try {
+        savedExercises = loadCustomExercises();
+      } catch (err) {
+          setCreationError('Could not load saved custom exercises.');
+      }
       try {
         setLoading(true);
         // ExerciseDB API via RapidAPI or local Kaggle dataset JSON
@@ -32,10 +75,34 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
         }
 
         const data = await response.json();
-        setExercises(data);
+        setExercises(data.concat(savedExercises));
       } catch (err) {
-        setError(err.message);
-      } finally {
+  console.warn("Exercise API unavailable; using fallback exercises:", err);
+
+  setExercises([
+    {
+      id: "local-bench-press",
+      name: "Bench Press",
+      bodyPart: "chest",
+      target: "pectorals",
+      equipment: "barbell"
+    },
+    {
+      id: "local-squat",
+      name: "Squat",
+      bodyPart: "upper legs",
+      target: "quads",
+      equipment: "barbell"
+    },
+    {
+      id: "local-push-up",
+      name: "Push-Up",
+      bodyPart: "chest",
+      target: "pectorals",
+      equipment: "body weight"
+    }
+  ].concat(savedExercises));
+} finally {
         setLoading(false);
       }
     };
@@ -81,12 +148,117 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
     }
   };
 
+  function handleCreateExercise() {
+    const trimmedName = customExerciseName.trim();
+
+    // Find the exercise selected in the dropdown.
+    const relatedExercise = exercises.find(
+      (exercise) => String(exercise.id) === relatedExerciseId
+    );
+
+    if (!trimmedName) {
+      setCreationError('Please enter an exercise name.');
+      return;
+    }
+
+    if (!relatedExercise) {
+      setCreationError('Please select a related exercise.');
+      return;
+    }
+
+    const nameExists = exercises.some(
+      (exercise) =>
+        exercise.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+
+    if (nameExists) {
+      setCreationError('An exercise with that name already exists.');
+      return;
+    }
+
+    // Start with the related exercise's categories.
+    const customExercise = {
+      id: `custom-${crypto.randomUUID()}`,
+      name: trimmedName,
+      bodyPart: relatedExercise.bodyPart,
+      target: relatedExercise.target,
+      equipment: relatedExercise.equipment,
+      relatedExerciseId: relatedExercise.id,
+      relatedExerciseName: relatedExercise.name,
+      isCustom: true
+    };
+
+    // Collect existing custom exercises and append the new one.
+    const exercisesToSave = [];
+
+    for (const exercise of exercises) {
+      if (exercise.isCustom === true) {
+        exercisesToSave.push(exercise);
+      }
+    }
+
+exercisesToSave.push(customExercise);
+
+try {
+  const savedText = JSON.stringify(exercisesToSave);
+  localStorage.setItem('osc-custom-exercises', savedText);
+} catch (err) {
+  setCreationError('Could not save the exercise. Please try again.');
+  return;
+}
+
+// Display the exercise after it has been saved.
+setExercises(exercises.concat(customExercise));
+
+    // Clear filters so that the newly created exercise is visible
+    setSearchTerm('');
+    setSelectedMuscle('all');
+    setViewTab('all');
+
+    setCustomExerciseName('');
+    setRelatedExerciseId('');
+    setCreationError('');
+  }
+
   if (loading) return <div className="loading-spinner">Loading exercise library...</div>;
-  if (error) return <div className="error-message">Error fetching exercises: {error}</div>;
 
   return (
     <div className="workout-list-container">
       <h2>Workout Exercises</h2>
+
+    <div>
+      <label htmlFor="custom-exercise-name">Custom exercise name: </label>
+      <input
+        id="custom-exercise-name"
+        type="text"
+        placeholder="Example: Hammer Curls"
+        value={customExerciseName}
+        onChange={(event) => setCustomExerciseName(event.target.value)}
+      />
+    </div>
+
+    <div>
+      <label htmlFor="related-exercise">Related exercise: </label>
+      <select
+        id="related-exercise"
+        value={relatedExerciseId}
+        onChange={(event) => setRelatedExerciseId(event.target.value)}
+      >
+        <option value="">Select an exercise</option>
+
+        {exercises.map((exercise) => (
+          <option key={exercise.id} value={String(exercise.id)}>
+            {exercise.name}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <button type="button" onClick={handleCreateExercise}>
+       Create Exercise
+    </button>
+
+    {creationError && <p role="alert">{creationError}</p>}
 
       {/* View Tabs: All, Frequently Used */}
       <div className="tab-navigation">
@@ -145,6 +317,10 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
                 />
               )}
               <h3 className="exercise-title">{exercise.name}</h3>
+              {/* Show which exercise the custom variation is based on. */}
+              {exercise.isCustom && (
+                <p>Variant of: {exercise.relatedExerciseName}</p>
+              )}    
               <div className="exercise-meta">
                 <span className="badge muscle">{exercise.bodyPart}</span>
                 <span className="badge target">{exercise.target}</span>
