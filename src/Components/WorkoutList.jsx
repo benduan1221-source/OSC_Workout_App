@@ -32,7 +32,6 @@ function loadCustomExercises() {
 const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   // Custom exercise form
   const [customExerciseName, setCustomExerciseName] = useState('');
@@ -222,7 +221,6 @@ setExercises(exercises.concat(customExercise));
   }
 
   if (loading) return <div className="loading-spinner">Loading exercise library...</div>;
-  if (error) return <div className="error-message">Error fetching exercises: {error}</div>;
 
   return (
     <div className="workout-list-container">
@@ -319,6 +317,10 @@ setExercises(exercises.concat(customExercise));
                 />
               )}
               <h3 className="exercise-title">{exercise.name}</h3>
+              {/* Show which exercise the custom variation is based on. */}
+              {exercise.isCustom && (
+                <p>Variant of: {exercise.relatedExerciseName}</p>
+              )}    
               <div className="exercise-meta">
                 <span className="badge muscle">{exercise.bodyPart}</span>
                 <span className="badge target">{exercise.target}</span>
