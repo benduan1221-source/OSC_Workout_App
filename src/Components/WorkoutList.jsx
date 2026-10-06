@@ -1,6 +1,34 @@
 // generated list of workouts based on relevance to user, muscle group or frequently used
 import React, {useState, useEffect, useMemo} from 'react';
 
+// Read custom exercises saved in this browser.
+function loadCustomExercises() {
+  const savedText = localStorage.getItem('osc-custom-exercises');
+
+  if (savedText === null) {
+    return [];
+  }
+
+  const savedExercises = JSON.parse(savedText);
+
+  if (!Array.isArray(savedExercises)) {
+    throw new Error('Saved exercises must be a list.');
+  }
+
+  for (const exercise of savedExercises) {
+    if (
+      !exercise ||
+      typeof exercise.id !== 'string' ||
+      typeof exercise.name !== 'string' ||
+      exercise.isCustom !== true
+    ) {
+      throw new Error('Invalid saved exercise.');
+    }
+  }
+
+  return savedExercises;
+}
+
 const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +52,14 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
 
   useEffect(() => {
     const fetchExercises = async () => {
+
+      let savedExercises = [];
+
+      try {
+        savedExercises = loadCustomExercises();
+      } catch (err) {
+          setCreationError('Could not load saved custom exercises.');
+      }
       try {
         setLoading(true);
         // ExerciseDB API via RapidAPI or local Kaggle dataset JSON
@@ -40,7 +76,7 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
         }
 
         const data = await response.json();
-        setExercises(data);
+        setExercises(data.concat(savedExercises));
       } catch (err) {
   console.warn("Exercise API unavailable; using fallback exercises:", err);
 
@@ -66,7 +102,7 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
       target: "pectorals",
       equipment: "body weight"
     }
-  ]);
+  ].concat(savedExercises));
 } finally {
         setLoading(false);
       }
@@ -153,7 +189,27 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
       isCustom: true
     };
 
-    setExercises((previous) => [...previous, customExercise]);
+    // Collect existing custom exercises and append the new one.
+    const exercisesToSave = [];
+
+    for (const exercise of exercises) {
+      if (exercise.isCustom === true) {
+        exercisesToSave.push(exercise);
+      }
+    }
+
+exercisesToSave.push(customExercise);
+
+try {
+  const savedText = JSON.stringify(exercisesToSave);
+  localStorage.setItem('osc-custom-exercises', savedText);
+} catch (err) {
+  setCreationError('Could not save the exercise. Please try again.');
+  return;
+}
+
+// Display the exercise after it has been saved.
+setExercises(exercises.concat(customExercise));
 
     // Clear filters so that the newly created exercise is visible
     setSearchTerm('');
