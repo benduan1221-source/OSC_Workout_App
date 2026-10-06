@@ -6,6 +6,14 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Custom exercise form
+  const [customExerciseName, setCustomExerciseName] = useState('');
+
+  // Stores the ID of the exercise this custom exercise is based on.
+  const [relatedExerciseId, setRelatedExerciseId] = useState('');
+  // Holds a validation message
+  const [creationError, setCreationError] = useState('');
+
   //filter & Search states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('all');
@@ -105,12 +113,98 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
     }
   };
 
+  function handleCreateExercise() {
+    const trimmedName = customExerciseName.trim();
+
+    // Find the exercise selected in the dropdown.
+    const relatedExercise = exercises.find(
+      (exercise) => String(exercise.id) === relatedExerciseId
+    );
+
+    if (!trimmedName) {
+      setCreationError('Please enter an exercise name.');
+      return;
+    }
+
+    if (!relatedExercise) {
+      setCreationError('Please select a related exercise.');
+      return;
+    }
+
+    const nameExists = exercises.some(
+      (exercise) =>
+        exercise.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+
+    if (nameExists) {
+      setCreationError('An exercise with that name already exists.');
+      return;
+    }
+
+    // Start with the related exercise's categories.
+    const customExercise = {
+      id: `custom-${crypto.randomUUID()}`,
+      name: trimmedName,
+      bodyPart: relatedExercise.bodyPart,
+      target: relatedExercise.target,
+      equipment: relatedExercise.equipment,
+      relatedExerciseId: relatedExercise.id,
+      relatedExerciseName: relatedExercise.name,
+      isCustom: true
+    };
+
+    setExercises((previous) => [...previous, customExercise]);
+
+    // Clear filters so that the newly created exercise is visible
+    setSearchTerm('');
+    setSelectedMuscle('all');
+    setViewTab('all');
+
+    setCustomExerciseName('');
+    setRelatedExerciseId('');
+    setCreationError('');
+  }
+
   if (loading) return <div className="loading-spinner">Loading exercise library...</div>;
   if (error) return <div className="error-message">Error fetching exercises: {error}</div>;
 
   return (
     <div className="workout-list-container">
       <h2>Workout Exercises</h2>
+
+    <div>
+      <label htmlFor="custom-exercise-name">Custom exercise name: </label>
+      <input
+        id="custom-exercise-name"
+        type="text"
+        placeholder="Example: Hammer Curls"
+        value={customExerciseName}
+        onChange={(event) => setCustomExerciseName(event.target.value)}
+      />
+    </div>
+
+    <div>
+      <label htmlFor="related-exercise">Related exercise: </label>
+      <select
+        id="related-exercise"
+        value={relatedExerciseId}
+        onChange={(event) => setRelatedExerciseId(event.target.value)}
+      >
+        <option value="">Select an exercise</option>
+
+        {exercises.map((exercise) => (
+          <option key={exercise.id} value={String(exercise.id)}>
+            {exercise.name}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <button type="button" onClick={handleCreateExercise}>
+       Create Exercise
+    </button>
+
+    {creationError && <p role="alert">{creationError}</p>}
 
       {/* View Tabs: All, Frequently Used */}
       <div className="tab-navigation">
