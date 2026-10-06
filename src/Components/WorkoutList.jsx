@@ -34,8 +34,32 @@ const WorkoutList = ({onSelectExercise, userFavorites = []}) => {
         const data = await response.json();
         setExercises(data);
       } catch (err) {
-        setError(err.message);
-      } finally {
+  console.warn("Exercise API unavailable; using fallback exercises:", err);
+
+  setExercises([
+    {
+      id: "local-bench-press",
+      name: "Bench Press",
+      bodyPart: "chest",
+      target: "pectorals",
+      equipment: "barbell"
+    },
+    {
+      id: "local-squat",
+      name: "Squat",
+      bodyPart: "upper legs",
+      target: "quads",
+      equipment: "barbell"
+    },
+    {
+      id: "local-push-up",
+      name: "Push-Up",
+      bodyPart: "chest",
+      target: "pectorals",
+      equipment: "body weight"
+    }
+  ]);
+} finally {
         setLoading(false);
       }
     };
